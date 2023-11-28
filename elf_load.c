@@ -186,19 +186,19 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 			    (uint64_t) phdr.p_memsz,
 			    (uint64_t) phdr.p_align);
 		uk_pr_debug("%s: \\_ segment at pie + 0x%"PRIx64" (len: 0x%"PRIx64") from file @ 0x%"PRIx64" (len: 0x%"PRIx64")\n",
-			    elf_prog->name, phdr.p_paddr, phdr.p_memsz,
+			    elf_prog->name, phdr.p_vaddr, phdr.p_memsz,
 			    (uint64_t) phdr.p_offset, (uint64_t) phdr.p_filesz);
 
 		if (elf_prog->lowerl == 0 && elf_prog->upperl == 0) {
 			/* first run */
-			elf_prog->lowerl = phdr.p_paddr;
+			elf_prog->lowerl = phdr.p_vaddr;
 			elf_prog->upperl = elf_prog->lowerl + phdr.p_memsz;
 		} else {
 			/* Move lower and upper border */
-			if (phdr.p_paddr < elf_prog->lowerl)
-				elf_prog->lowerl = phdr.p_paddr;
-			if (phdr.p_paddr + phdr.p_memsz > elf_prog->upperl)
-				elf_prog->upperl = phdr.p_paddr + phdr.p_memsz;
+			if (phdr.p_vaddr < elf_prog->lowerl)
+				elf_prog->lowerl = phdr.p_vaddr;
+			if (phdr.p_vaddr + phdr.p_memsz > elf_prog->upperl)
+				elf_prog->upperl = phdr.p_vaddr + phdr.p_memsz;
 		}
 		UK_ASSERT(elf_prog->lowerl <= elf_prog->upperl);
 
@@ -206,7 +206,7 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		if (phdr.p_offset <= ehdr.e_phoff &&
 		    ehdr.e_phoff < phdr.p_offset + phdr.p_filesz)
 			elf_prog->phdr.off = ehdr.e_phoff - phdr.p_offset +
-					     phdr.p_paddr;
+					     phdr.p_vaddr;
 	}
 	uk_pr_debug("%s: base: pie + 0x%"PRIx64", len: 0x%"PRIx64"\n",
 		    elf_prog->name, elf_prog->lowerl, elf_prog->upperl - elf_prog->lowerl);
@@ -302,7 +302,7 @@ static int elf_load_imgcpy(struct elf_prog *elf_prog, Elf *elf,
 		if (phdr.p_type != PT_LOAD)
 			continue;
 
-		vastart = phdr.p_paddr + (uintptr_t) elf_prog->vabase;
+		vastart = phdr.p_vaddr + (uintptr_t)elf_prog->vabase;
 		vaend   = vastart + phdr.p_filesz;
 		if (!elf_prog->start || (vastart < elf_prog->start))
 			elf_prog->start = vastart;
@@ -466,6 +466,25 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 		    (uint64_t)elf_prog->vabase,
 		    (uint64_t)elf_prog->vabase + elf_prog->valen);
 
+
+	vastart = (uintptr_t)mmap((void *)vastart + phdr->p_vaddr,
+				  phdr->p_filesz,
+				  PROT_EXEC | PROT_READ | PROT_WRITE,
+				  MAP_PRIVATE | MAP_FIXED,
+				  fd, phdr->p_offset);
+	if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
+		uk_pr_err("Failed to mmap first phdr\n");
+		return (int)vastart;
+	}
+	elf_prog->start = vastart;
+
+	uk_pr_debug("%s: Memory mapped 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
+		    elf_prog->name,
+		    (uint64_t)phdr->p_offset,
+		    (uint64_t)phdr->p_offset + phdr->p_filesz,
+		    (uint64_t)vastart,
+		    (uint64_t)vastart + (uint64_t)phdr->p_filesz);
+
 	/* mmap anonymously what we are left if memsz > filesz */
 	vastart = vastart + phdr->p_filesz;
 	vaend = PAGE_ALIGN_UP(vastart + (phdr->p_memsz - phdr->p_filesz));
@@ -502,9 +521,9 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	 * Therefore, taking care of the address misalignment will also take
 	 * care of the file misalignment.
 	 */
-	delta_p_offset = phdr->p_paddr - PAGE_ALIGN_DOWN(phdr->p_paddr);
+	delta_p_offset = phdr->p_vaddr - PAGE_ALIGN_DOWN(phdr->p_vaddr);
 
-	addr = (void *)PAGE_ALIGN_DOWN((phdr->p_paddr +
+	addr = (void *)PAGE_ALIGN_DOWN((phdr->p_vaddr +
 				       (uintptr_t)elf_prog->vabase));
 
 	uk_pr_debug("%s: Memory mapping 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
@@ -585,7 +604,7 @@ static int elf_load_fdphdr(struct elf_prog *elf_prog, GElf_Phdr *phdr, int fd)
 	uintptr_t vastart, vaend;
 	int ret;
 
-	vastart = phdr->p_paddr + (uintptr_t)elf_prog->vabase;
+	vastart = phdr->p_vaddr + (uintptr_t)elf_prog->vabase;
 	vaend   = vastart + phdr->p_filesz;
 	if (!elf_prog->start || (vastart < elf_prog->start))
 		elf_prog->start = vastart;
@@ -773,7 +792,7 @@ static int elf_load_ptprotect(struct elf_prog *elf_prog, Elf *elf)
 		if (phdr.p_type != PT_LOAD)
 			continue;
 
-		vastart = phdr.p_paddr + (uintptr_t) elf_prog->vabase;
+		vastart = phdr.p_vaddr + (uintptr_t)elf_prog->vabase;
 		vaend   = vastart + phdr.p_memsz;
 		vastart = PAGE_ALIGN_DOWN(vastart);
 		vaend   = PAGE_ALIGN_UP(vaend);
