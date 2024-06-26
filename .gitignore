@@ -4,3 +4,10 @@
 /.unikraft/
 /workdir/
 .cache/clangd/index
+.fd
+app-elfloader.cmdl
+app-nginx.cmdl
+compile_commands.json
+fs0.cpio
+kernel.iso
+stdout.log
