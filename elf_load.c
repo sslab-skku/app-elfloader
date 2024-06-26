@@ -1,3 +1,5 @@
+#define UK_DEBUG 1
+
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
  * Copyright (c) 2017, Stefan Lankes, RWTH Aachen University
@@ -41,6 +43,7 @@
  * (see file /LICENSE in the HermiTux Kernel repository).
  */
 
+#include "uk/arch/paging.h"
 #include <uk/config.h>
 
 #include <libelf.h>
@@ -758,6 +761,8 @@ static int elf_load_ptprotect(struct elf_prog *elf_prog, Elf *elf)
 	 * Setup memory protection
 	 */
 	for (phi = 0; phi < phnum; ++phi) {
+		int attr;
+
 		if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
 			elferr_warn("%s: Failed to get program header %"PRIu64"\n",
 				    elf_prog->name, (uint64_t) phi);
@@ -778,14 +783,15 @@ static int elf_load_ptprotect(struct elf_prog *elf_prog, Elf *elf)
 				phdr.p_flags & PF_R ? 'R' : '-',
 				phdr.p_flags & PF_W ? 'W' : '-',
 				phdr.p_flags & PF_X ? 'X' : '-');
-		ret = uk_vma_set_attr(vas, vastart, valen,
-				((phdr.p_flags & PF_R) ?
-				  PAGE_ATTR_PROT_READ  : 0x0) |
-				((phdr.p_flags & PF_W) ?
-				  PAGE_ATTR_PROT_WRITE : 0x0) |
-				((phdr.p_flags & PF_X) ?
-				  PAGE_ATTR_PROT_EXEC  : 0x0),
-				0);
+
+		attr =
+		    ((phdr.p_flags & PF_R) ? PAGE_ATTR_PROT_READ : 0x0)
+		    | ((phdr.p_flags & PF_W) ? PAGE_ATTR_PROT_WRITE : 0x0)
+		    | ((phdr.p_flags & PF_X) ? PAGE_ATTR_PROT_EXEC : 0x0);
+
+		attr |= PAGE_ATTR_ENCRYPT;
+
+		ret = uk_vma_set_attr(vas, vastart, valen, attr, 0);
 		if (ret < 0)
 			uk_pr_err("%s: Failed to set protection bits: %d. Program execution may fail or might be unsafe.\n",
 				  elf_prog->name, ret);
@@ -816,7 +822,7 @@ static void elf_unload_ptunprotect(struct elf_prog *elf_prog)
 	uk_pr_debug("%s: Restore RW- protection: 0x%"PRIx64" - 0x%"PRIx64"\n",
 		    elf_prog->name, (uint64_t) vastart, (uint64_t) vaend);
 	ret = uk_vma_set_attr(vas, vastart, valen,
-			      (PAGE_ATTR_PROT_READ | PAGE_ATTR_PROT_WRITE), 0);
+			      (PAGE_ATTR_PROT_READ | PAGE_ATTR_PROT_WRITE | PAGE_ATTR_ENCRYPT), 0);
 	if (unlikely(ret < 0))
 		uk_pr_err("%s: Failed to restore protection bits: %d.\n",
 			  elf_prog->name, ret);
