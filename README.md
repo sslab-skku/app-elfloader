@@ -1,5 +1,13 @@
 # Unikraft ELF Loader
 
+## Running helloworld
+
+```bash
+./build_image.sh && sudo ../../sev-step/launch-qemu.sh  -cdrom kernel.iso -sev-snp -initrd fs0.cpio -mem 4096
+```
+
+---
+
 The ELF Loader is the integral part of the binary compatibility layer, that enables Unikraft to run unmodified Linux applications.
 Linux binaries (ELFS - **Executable and Linking Format**) are loaded by the ELF Loader, and then control is passed to them binary.
 
@@ -71,16 +79,16 @@ That is, press `Ctrl` and `a` at the same time, and then, separately, `x`.
 
 In order to set up, configure, build and run `app-elfloader` on Unikraft, the following packages are required:
 
-* `build-essential` / `base-devel` / `@development-tools` (the meta-package that includes `make`, `gcc` and other development-related packages)
-* `sudo`
-* `flex`
-* `bison`
-* `git`
-* `wget`
-* `uuid-runtime`
-* `qemu-system-x86`
-* `qemu-kvm`
-* `sgabios`
+- `build-essential` / `base-devel` / `@development-tools` (the meta-package that includes `make`, `gcc` and other development-related packages)
+- `sudo`
+- `flex`
+- `bison`
+- `git`
+- `wget`
+- `uuid-runtime`
+- `qemu-system-x86`
+- `qemu-kvm`
+- `sgabios`
 
 On Ubuntu/Debian or other `apt`-based distributions, run the following command to install the requirements:
 
@@ -113,76 +121,76 @@ echo "allow all" | sudo tee /etc/qemu/bridge.conf
 
 The following repositories are required for `app-elfloader`:
 
-* The application repository (this repository): [`app-elfloader`](https://github.com/unikraft/app-elfloader)
-* The Unikraft core repository: [`unikraft`](https://github.com/unikraft/unikraft)
-* Library repositories:
-  * The networking stack library: [`lib-lwip`](https://github.com/unikraft/lib-lwip)
-  * The `ELF` Tool Chain library: [`lib-libelf`](https://github.com/unikraft/lib-libelf)
+- The application repository (this repository): [`app-elfloader`](https://github.com/unikraft/app-elfloader)
+- The Unikraft core repository: [`unikraft`](https://github.com/unikraft/unikraft)
+- Library repositories:
+  - The networking stack library: [`lib-lwip`](https://github.com/unikraft/lib-lwip)
+  - The `ELF` Tool Chain library: [`lib-libelf`](https://github.com/unikraft/lib-libelf)
 
 Follow the steps below for the setup:
 
-  1. First clone the [`dynamic-apps` repository](https://github.com/unikraft/dynamic-apps) that contains pre-build ELFs to be used with `elfloader`:
+1. First clone the [`dynamic-apps` repository](https://github.com/unikraft/dynamic-apps) that contains pre-build ELFs to be used with `elfloader`:
 
-     ```console
-     git clone https://github.com/unikraft/dynamic-apps dynamic-apps
-     ```
+      ```console
+      git clone https://github.com/unikraft/dynamic-apps dynamic-apps
+      ```
 
-  1. Now clone the [`app-elfloader` repository](https://github.com/unikraft/app-elfloader) in the `elfloader/` directory, on the same level with the `dynamic-apps` repository clone:
+1. Now clone the [`app-elfloader` repository](https://github.com/unikraft/app-elfloader) in the `elfloader/` directory, on the same level with the `dynamic-apps` repository clone:
 
-     ```console
-     git clone https://github.com/unikraft/app-elfloader elfloader
-     ```
+      ```console
+      git clone https://github.com/unikraft/app-elfloader elfloader
+      ```
 
-     Enter the `elfloader/` directory:
+      Enter the `elfloader/` directory:
 
-     ```console
-     cd elfloader/
+      ```console
+      cd elfloader/
 
-     ls -F
-     ```
+      ls -F
+      ```
 
-     This will show you the contents of the repository:
+      This will show you the contents of the repository:
 
-     ```text
-     arch_prctl.c  brk.c  Config.uk  elf_ctx.c  elf_load.c  elf_prog.h  example/  exportsyms.uk  libelf_helper.h  main.c  Makefile  Makefile.uk  README.md  support/
-     ```
+      ```text
+      arch_prctl.c  brk.c  Config.uk  elf_ctx.c  elf_load.c  elf_prog.h  example/  exportsyms.uk  libelf_helper.h  main.c  Makefile  Makefile.uk  README.md  support/
+      ```
 
-  1. While inside the `elfloader/` directory, clone all required repositories by using the `setup.sh` script:
+1. While inside the `elfloader/` directory, clone all required repositories by using the `setup.sh` script:
 
-     ```console
-     ./scripts/setup.sh
-     ```
+      ```console
+      ./scripts/setup.sh
+      ```
 
-  1. Use the `tree` command to inspect the contents of the `workdir/` directory.
-     It should print something like this:
+1. Use the `tree` command to inspect the contents of the `workdir/` directory.
+   It should print something like this:
 
-     ```console
-     tree -F -L 2 workdir/
-     ```
+      ```console
+      tree -F -L 2 workdir/
+      ```
 
-     The layout of the `workdir/` directory should look something like this:
+      The layout of the `workdir/` directory should look something like this:
 
-     ```text
-     workdir/
-     |-- libs/
-     |   |-- lwip/
-     |   |-- libelf/
-     `-- unikraft/
-         |-- arch/
-         |-- Config.uk
-         |-- CONTRIBUTING.md
-         |-- COPYING.md
-         |-- include/
-         |-- lib/
-         |-- Makefile
-         |-- Makefile.uk
-         |-- plat/
-         |-- README.md
-         |-- support/
-         `-- version.mk
+      ```text
+      workdir/
+      |-- libs/
+      |   |-- lwip/
+      |   |-- libelf/
+      `-- unikraft/
+          |-- arch/
+          |-- Config.uk
+          |-- CONTRIBUTING.md
+          |-- COPYING.md
+          |-- include/
+          |-- lib/
+          |-- Makefile
+          |-- Makefile.uk
+          |-- plat/
+          |-- README.md
+          |-- support/
+          `-- version.mk
 
-     9 directories, 7 files
-     ```
+      9 directories, 7 files
+      ```
 
 ## Scripted Building and Running
 
@@ -304,9 +312,9 @@ Before building after some changes had been made, you may need to clean up the b
 
 Cleaning up is done with 3 possible commands:
 
-* `make clean`: cleans all actual build output files (binary files, including the unikernel image)
-* `make properclean`: removes the entire `build/` directory
-* `make distclean`: removes the entire `build/` directory **and** the `.config` file
+- `make clean`: cleans all actual build output files (binary files, including the unikernel image)
+- `make properclean`: removes the entire `build/` directory
+- `make distclean`: removes the entire `build/` directory **and** the `.config` file
 
 Typically, you would use `make properclean` to remove all build artifacts, but keep the configuration file.
 
@@ -350,9 +358,9 @@ For a helloworld example application (here: [`/example/helloworld`](./example/he
 
 ```sh
 $ ldd helloworld
-	linux-vdso.so.1 (0x00007ffdd695d000)
-	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007efed259f000)
-	/lib64/ld-linux-x86-64.so.2 (0x00007efed2787000)
+ linux-vdso.so.1 (0x00007ffdd695d000)
+ libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007efed259f000)
+ /lib64/ld-linux-x86-64.so.2 (0x00007efed2787000)
 ```
 
 Copy the library dependencies to the same subdirectories as reported by `ldd`.
@@ -380,9 +388,9 @@ The application can then be started with:
             -a "/helloworld <application arguments>"
 ```
 
-*NOTE:* This command line example expects that you built your unikernel with `Application Options -> Application name/path via command line` (`APPELFLOADER_CUSTOMAPPNAME`).
+_NOTE:_ This command line example expects that you built your unikernel with `Application Options -> Application name/path via command line` (`APPELFLOADER_CUSTOMAPPNAME`).
 
-*HINT:* Environment variables can be set through `lib/posix-environ` and `lib/uklibparam`.
+_HINT:_ Environment variables can be set through `lib/posix-environ` and `lib/uklibparam`.
 For this purpose, enable `Library Configuration -> posix-environ` and activate `Parse kernel command line arguments`.
 The variables can be handed over via the kernel command line with the Unikraft library parameter `env.vars`, for example:
 
@@ -391,7 +399,7 @@ The variables can be handed over via the kernel command line with the Unikraft l
             -a "env.vars=[ LD_LIBRARY_PATH=/lib LD_SHOW_AUXV=1 ] -- /helloworld <application arguments>"
 ```
 
-*NOTE:* At the moment, a program exit will not yet cause a shutdown of the elfloader unikernel. You need to manually terminate it.
+_NOTE:_ At the moment, a program exit will not yet cause a shutdown of the elfloader unikernel. You need to manually terminate it.
 In case of `qemu-guest`, you can use `CTRL` + `C`.
 
 ## Debugging
@@ -438,7 +446,7 @@ The resulting address here is `0x40010a2a0`. The symbols of the static helloworl
 
 From this point you have symbol resolution in your debugger, for both the Unikraft elfloader and the loaded application.
 
-*NOTE:* You can only set regular breakpoints within the application (`break` with GDB) after it got loaded into memory by elfloader (otherwise they will be ignored).
+_NOTE:_ You can only set regular breakpoints within the application (`break` with GDB) after it got loaded into memory by elfloader (otherwise they will be ignored).
 The recommended procedure is:
 
 1. Set a breakpoint just after the application was loaded (e.g., the first system call that the application executes),
@@ -478,7 +486,7 @@ Please do the same for each dynamically loaded library.
 To load the application and library symbols appropriately, as described in the previous subsection, you must add the segment offset of the `.text` section to the virtual base address.
 This allows you to load the symbols from `gdb` with `add-symbol-file`.
 
-*NOTE:* Regular breakpoints in shared libraries can only be set after the libraries have been loaded into memory.
+_NOTE:_ Regular breakpoints in shared libraries can only be set after the libraries have been loaded into memory.
 Since these are loaded by the dynamic loader and not directly by the `elfloader`, this is done with `mmap` system calls as shown in the console snippet above.
 The corresponding `close` system call (`break uk_syscall_r_close`) is a safe place to hop to before setting the actual breakpoints within a shared library.
 
@@ -499,19 +507,19 @@ GDBSRV=":1234"
 #                        "<base load address (hex, no leading '0x')>"
 gdb-add-symbols()
 {
-	local LOAD_ELF="$1"
-	local LOAD_ADDR="${2}"
-	local LOAD_TADDR=
-	local TEXT_OFFSET=
+ local LOAD_ELF="$1"
+ local LOAD_ADDR="${2}"
+ local LOAD_TADDR=
+ local TEXT_OFFSET=
 
-	# Hacky way to figure out the .text offset
-	TEXT_OFFSET=$( readelf -S "${LOAD_ELF}" | grep '.text' | awk '{ print $5 }' )
+ # Hacky way to figure out the .text offset
+ TEXT_OFFSET=$( readelf -S "${LOAD_ELF}" | grep '.text' | awk '{ print $5 }' )
 
-	# Compute offset of .text section with base address
-	LOAD_TADDR=$( printf 'obase=16;ibase=16;%s+%s\n' "${LOAD_ADDR^^}" "${TEXT_OFFSET^^}" | bc )
+ # Compute offset of .text section with base address
+ LOAD_TADDR=$( printf 'obase=16;ibase=16;%s+%s\n' "${LOAD_ADDR^^}" "${TEXT_OFFSET^^}" | bc )
 
-	# Generate GDB command
-	printf 'add-symbol-file -readnow %s 0x%s' "${LOAD_ELF}" "${LOAD_TADDR}"
+ # Generate GDB command
+ printf 'add-symbol-file -readnow %s 0x%s' "${LOAD_ELF}" "${LOAD_TADDR}"
 }
 
 # Connect to $GDBSRV and set up gdb
@@ -532,15 +540,15 @@ gdb-add-symbols()
 #       extract the glibc sources under /usr/src/glibc.
 #         --eval-command="directory /usr/src/glibc/glibc-2.31"
 exec gdb \
-	--eval-command="target remote $GDBSRV" \
-	--eval-command="hbreak _ukplat_entry" \
-	--eval-command="continue" \
-	--eval-command="disconnect" \
-	--eval-command="set arch i386:x86-64:intel" \
-	--eval-command="target remote $GDBSRV" \
-	\
-	--eval-command="$( gdb-add-symbols "rootfs/helloworld" "8000000000" )" \
-	--eval-command="$( gdb-add-symbols "rootfs/libc.so.6" "8000005000" )"
+ --eval-command="target remote $GDBSRV" \
+ --eval-command="hbreak _ukplat_entry" \
+ --eval-command="continue" \
+ --eval-command="disconnect" \
+ --eval-command="set arch i386:x86-64:intel" \
+ --eval-command="target remote $GDBSRV" \
+ \
+ --eval-command="$( gdb-add-symbols "rootfs/helloworld" "8000000000" )" \
+ --eval-command="$( gdb-add-symbols "rootfs/libc.so.6" "8000005000" )"
 ```
 
 #### Hint: Debug symbols of libraries installed from packages
