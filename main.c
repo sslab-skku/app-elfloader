@@ -1,3 +1,4 @@
+#define UK_DEBUG 1
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
  * Authors: Simon Kuenzer <simon@unikraft.io>

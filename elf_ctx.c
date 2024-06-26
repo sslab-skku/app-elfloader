@@ -1,3 +1,5 @@
+#define UK_DEBUG 1
+
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
  * Authors: Pierre Oliver <pierre.olivier@manchester.ac.uk>
