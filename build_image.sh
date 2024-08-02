@@ -18,7 +18,7 @@ BINARY=build/${UK_APP}_qemu-x86_64
 
 # DYN_APP=helloworld
 # DYN_APP=a.out
-DYN_APP=a.out
+DYN_APP=$1
 echo "Building $UK_APP"
 
 # Update config accordingly
@@ -27,7 +27,8 @@ echo "Building $UK_APP"
 rm -rf $CMD_LINE
 # if [ ! -f $CMD_LINE ]; then
 # LD_DEBUG=all
-echo "$UK_APP env.vars=[ LD_LIBRARY_PATH=/lib/x86_64-linux-gnu/ LD_BIND_NOW=1 LD_DEBUG=all  ]  netdev.ipv4_addr=172.44.0.2 netdev.ipv4_gw_addr=172.44.0.1 netdev.ipv4_subnet_mask=255.255.255.0 -- $DYN_APP -cCOM.DAT" >$CMD_LINE
+# echo "$UK_APP env.vars=[ LD_LIBRARY_PATH=/lib/x86_64-linux-gnu/ LD_SHOW_AUXV=1 LD_BIND_NOW=1 LD_DEBUG=all  ]  netdev.ipv4_addr=172.44.0.2 netdev.ipv4_gw_addr=172.44.0.1 netdev.ipv4_subnet_mask=255.255.255.0 -- $DYN_APP -cCOM.DAT" >$CMD_LINE
+echo "$UK_APP env.vars=[ LD_LIBRARY_PATH=/lib/x86_64-linux-gnu/ LD_SHOW_AUXV=1 LD_BIND_NOW=1 ]  netdev.ipv4_addr=172.44.0.2 netdev.ipv4_gw_addr=172.44.0.1 netdev.ipv4_subnet_mask=255.255.255.0 -- $DYN_APP -cCOM.DAT" >$CMD_LINE
 # fi
 
 # Build initrd cpio file

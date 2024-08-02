@@ -70,6 +70,7 @@
 #include "libelf_helper.h"
 #include "elf_prog.h"
 
+static GElf_Phdr e9patch_entry = {0};
 /*
  * Checks that ELF headers are valid and supported and
  * computes the size of needed virtual memory space for the image
@@ -188,6 +189,15 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		uk_pr_debug("%s: \\_ segment at pie + 0x%"PRIx64" (len: 0x%"PRIx64") from file @ 0x%"PRIx64" (len: 0x%"PRIx64")\n",
 			    elf_prog->name, phdr.p_vaddr, phdr.p_memsz,
 			    (uint64_t) phdr.p_offset, (uint64_t) phdr.p_filesz);
+
+
+		// This is e9patch magic loader base
+		if (phdr.p_vaddr == 0xe9e9000)
+		{
+			uk_pr_info("Found e9patch segment\n");
+			e9patch_entry = phdr;
+			// continue;
+		}
 
 		if (elf_prog->lowerl == 0 && elf_prog->upperl == 0) {
 			/* first run */
@@ -1011,7 +1021,9 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 	}
 
 	elf_end(elf);
-	close(fd);
+	// INCOGNITOS: Don't close the FDs just yet, so that e9init can open
+	// them.
+	// close(fd);
 	return elf_prog;
 
 err_unload_vaimg:
@@ -1024,6 +1036,82 @@ err_close_fd:
 	close(fd);
 err_out:
 	return ERR2PTR(ret);
+}
+#include <oblivium/utils.h>
+
+static void __synthesize_relative_insn(void *dest, void *from, void *to, __u8 op)
+{
+	struct __arch_relative_insn {
+		__u8 op;
+		__s32 raddr;
+	} __packed *insn;
+
+	int64_t offset = ((long)(to) - ((long)(from) + 5));
+	if (offset > INT32_MAX || offset < INT32_MIN) {
+		// Target is out of range for a 32-bit relative call
+		UK_CRASH("Target 0%lx offset %ld is out of range\n", (unsigned long)to, offset);
+	}
+
+	insn = (struct __arch_relative_insn *)dest;
+	insn->raddr = (__s32)offset;
+	insn->op = op;
+}
+
+struct e9_config_s {
+	char magic[8];		// "E9PATCH\0"
+	char version[16];	// Version
+	uint32_t flags;		// Flags
+	uint32_t size;		// Loader total size
+	intptr_t base;		// Loader base address
+	intptr_t entry;		// Real entry point
+	intptr_t fini;		// Real fini() function
+	intptr_t mmap;		// mmap(), or 0x0
+	uint32_t num_maps[2];	// # Mappings
+	uint32_t maps[2];	// Mappings offset
+	uint32_t num_preinits;	// # Pre-init functions
+	uint32_t preinits;	// Pre-init functions offset
+	uint32_t num_postinits; // # Post-init functions
+	uint32_t postinits;	// Post-init functions offset
+	uint32_t num_inits;	// # Init functions
+	uint32_t inits;		// Init functions offset
+	uint32_t num_finis;	// # Fini functions
+	uint32_t finis;		// Fini functions offset
+	uint32_t num_traps;	// # Trap functions
+	uint32_t traps;		// Trap functions offset
+	uint32_t handler;	// Trap handler function
+};
+
+extern void* e9init();
+void incognitos_prepare_prog_entry(struct elf_prog *prog){
+	if (!e9patch_entry.p_vaddr)
+		return;
+
+	__vaddr_t loader_addr = (uintptr_t)prog->vabase + e9patch_entry.p_vaddr;
+
+	if (prog->entry >= loader_addr) {
+		char *data = (char *)prog->entry;
+		size_t call_init_offset = 25;
+
+		dump_disas(data, 100);
+
+		int ret;
+		struct uk_vas *vas = uk_vas_get_active();
+		int attr = PAGE_ATTR_PROT_RWX | PAGE_ATTR_ENCRYPT;
+
+		ret = uk_vma_set_attr(vas, (uintptr_t)loader_addr,
+				      PAGE_ALIGN_UP(e9patch_entry.p_memsz),
+				      attr, 0);
+
+		__synthesize_relative_insn(data + 25, data + 25,
+					   e9init, 0xe8);
+		dump_disas(data, 100);
+
+		if (ret) {
+			UK_CRASH("Cannot set page attr 0x%lx-0x%lx %d\n",
+				 loader_addr,
+				 loader_addr + e9patch_entry.p_memsz, ret);
+		}
+	}
 }
 
 struct elf_prog *elf_load_vfs(struct uk_alloc *a, const char *path,
@@ -1055,6 +1143,7 @@ struct elf_prog *elf_load_vfs(struct uk_alloc *a, const char *path,
 		}
 	}
 
+	incognitos_prepare_prog_entry(elf_prog);
 	return elf_prog;
 
 err_unload_prog:
