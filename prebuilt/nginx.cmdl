@@ -1,0 +1,1 @@
+/usr/local/nginx/sbin/nginx  -p /usr/local/nginx -c conf/nginx.conf
