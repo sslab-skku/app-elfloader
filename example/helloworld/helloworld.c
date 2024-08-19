@@ -35,5 +35,5 @@
 
 int main(int argc, char *argv[])
 {
-	printf("Hello world!\n");
+	printf("Hello world! 0x%lx\n", (unsigned long)main);
 }

@@ -13,3 +13,8 @@ kernel.iso
 stdout.log
 .cache/clangd/index
 fs0
+example/helloworld/helloworld
+example/helloworld/helloworld.o
+example/helloworld/helloworld_static
+fs0.fd
+kernel.fd
