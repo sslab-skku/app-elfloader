@@ -1,4 +1,6 @@
 #define UK_DEBUG 1
+#include "oblivium/oblivium.h"
+#include "oblivium/utils.h"
 
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
@@ -46,29 +48,29 @@
 #include "uk/arch/paging.h"
 #include <uk/config.h>
 
-#include <libelf.h>
-#include <gelf.h>
 #include <errno.h>
-#include <string.h>
+#include <gelf.h>
+#include <libelf.h>
 #include <stdlib.h>
+#include <string.h>
 #if CONFIG_LIBVFSCORE
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif /* CONFIG_LIBVFSCORE */
+#include <uk/arch/limits.h>
 #include <uk/assert.h>
-#include <uk/print.h>
-#include <uk/essentials.h>
-#include <uk/arch/limits.h>
 #include <uk/errptr.h>
+#include <uk/essentials.h>
+#include <uk/print.h>
 #if CONFIG_LIBUKVMEM
-#include <uk/vmem.h>
 #include <uk/arch/limits.h>
+#include <uk/vmem.h>
 #endif /* CONFIG_LIBUKVMEM */
 #include <sys/mman.h>
 
-#include "libelf_helper.h"
 #include "elf_prog.h"
+#include "libelf_helper.h"
 
 static GElf_Phdr e9patch_entry = {0};
 /*
@@ -102,13 +104,13 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		goto err_out;
 	}
 	/* Check machine */
-	uk_pr_debug("%s: ELF machine type: %"PRIu16"\n",
-		    elf_prog->name, ehdr.e_machine);
+	uk_pr_debug("%s: ELF machine type: %" PRIu16 "\n", elf_prog->name,
+		    ehdr.e_machine);
 	if
 #if CONFIG_ARCH_X86_64
-	unlikely((ehdr.e_machine != EM_X86_64))
+	    unlikely ((ehdr.e_machine != EM_X86_64))
 #elif CONFIG_ARCH_ARM_64
-	unlikely((ehdr.e_machine != EM_AARCH64))
+	    unlikely ((ehdr.e_machine != EM_AARCH64))
 #else
 #error "Unsupported machine type"
 #endif
@@ -118,12 +120,13 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		goto err_out;
 	}
 	/* Check ABI */
-	uk_pr_debug("%s: ELF OS ABI: %"PRIu8"\n",
-		    elf_prog->name, ehdr.e_ident[EI_OSABI]);
-	if (unlikely(ehdr.e_ident[EI_OSABI] != ELFOSABI_LINUX &&
-	    ehdr.e_ident[EI_OSABI] != ELFOSABI_NONE)) {
-		uk_pr_err("%s: ELF OS ABI unsupported: Require ELFOSABI_LINUX\n",
-			  elf_prog->name);
+	uk_pr_debug("%s: ELF OS ABI: %" PRIu8 "\n", elf_prog->name,
+		    ehdr.e_ident[EI_OSABI]);
+	if (unlikely(ehdr.e_ident[EI_OSABI] != ELFOSABI_LINUX
+		     && ehdr.e_ident[EI_OSABI] != ELFOSABI_NONE)) {
+		uk_pr_err(
+		    "%s: ELF OS ABI unsupported: Require ELFOSABI_LINUX\n",
+		    elf_prog->name);
 		ret = -ENOEXEC;
 		goto err_out;
 	}
@@ -132,8 +135,8 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 	 * https://www.openwall.com/lists/musl/2015/06/01/12
 	 * These binaries are type ET_DYN
 	 */
-	uk_pr_debug("%s: ELF object type: %"PRIu16"\n",
-		    elf_prog->name, ehdr.e_type);
+	uk_pr_debug("%s: ELF object type: %" PRIu16 "\n", elf_prog->name,
+		    ehdr.e_type);
 	if (unlikely(ehdr.e_type != ET_DYN)) {
 		uk_pr_err("%s: ELF executable is not position-independent!\n",
 			  elf_prog->name);
@@ -149,15 +152,18 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 	 */
 	for (phi = 0; phi < ehdr.e_phnum; ++phi) {
 		if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
-			elferr_warn("%s: Failed to get program header %"PRIu64"\n",
-				    elf_prog->name, (uint64_t) phi);
+			elferr_warn("%s: Failed to get program header %" PRIu64
+				    "\n",
+				    elf_prog->name, (uint64_t)phi);
 			continue;
 		}
 
 		if (phdr.p_type == PT_INTERP) {
 			if (elf_prog->interp.required) {
-				uk_pr_err("%s: ELF executable requests multiple program interpreters: Unsupported\n",
-					  elf_prog->name);
+				uk_pr_err(
+				    "%s: ELF executable requests multiple "
+				    "program interpreters: Unsupported\n",
+				    elf_prog->name);
 				ret = -ENOTSUP;
 				goto err_out;
 			}
@@ -175,28 +181,27 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		if (elf_prog->align < phdr.p_align)
 			elf_prog->align = phdr.p_align;
 
-		uk_pr_debug("%s: phdr[%"PRIu64"]: %c%c%c, offset: %p, vaddr: %p, paddr: %p, filesz: %"PRIu64" B, memsz %"PRIu64" B, align: %"PRIu64" B\n",
-			    elf_prog->name, phi,
-			    phdr.p_flags & PF_R ? 'R' : '-',
-			    phdr.p_flags & PF_W ? 'W' : '-',
-			    phdr.p_flags & PF_X ? 'X' : '-',
-			    (void *) phdr.p_offset,
-			    (void *) phdr.p_vaddr,
-			    (void *) phdr.p_paddr,
-			    (uint64_t) phdr.p_filesz,
-			    (uint64_t) phdr.p_memsz,
-			    (uint64_t) phdr.p_align);
-		uk_pr_debug("%s: \\_ segment at pie + 0x%"PRIx64" (len: 0x%"PRIx64") from file @ 0x%"PRIx64" (len: 0x%"PRIx64")\n",
+		uk_pr_debug(
+		    "%s: phdr[%" PRIu64 "]: %c%c%c, offset: %p, vaddr: %p, "
+					"paddr: %p, filesz: %" PRIu64
+		    " B, memsz %" PRIu64 " B, align: %" PRIu64 " B\n",
+		    elf_prog->name, phi, phdr.p_flags & PF_R ? 'R' : '-',
+		    phdr.p_flags & PF_W ? 'W' : '-',
+		    phdr.p_flags & PF_X ? 'X' : '-', (void *)phdr.p_offset,
+		    (void *)phdr.p_vaddr, (void *)phdr.p_paddr,
+		    (uint64_t)phdr.p_filesz, (uint64_t)phdr.p_memsz,
+		    (uint64_t)phdr.p_align);
+		uk_pr_debug("%s: \\_ segment at pie + 0x%" PRIx64
+			    " (len: 0x%" PRIx64 ") from file @ 0x%" PRIx64
+			    " (len: 0x%" PRIx64 ")\n",
 			    elf_prog->name, phdr.p_vaddr, phdr.p_memsz,
-			    (uint64_t) phdr.p_offset, (uint64_t) phdr.p_filesz);
-
+			    (uint64_t)phdr.p_offset, (uint64_t)phdr.p_filesz);
 
 		// This is e9patch magic loader base
-		if (phdr.p_vaddr == 0xe9e9000)
-		{
+		if (phdr.p_vaddr == 0xe9e9000) {
 			uk_pr_info("Found e9patch segment\n");
 			e9patch_entry = phdr;
-			// continue;
+			continue;
 		}
 
 		if (elf_prog->lowerl == 0 && elf_prog->upperl == 0) {
@@ -213,13 +218,14 @@ static int elf_load_parse(struct elf_prog *elf_prog, Elf *elf)
 		UK_ASSERT(elf_prog->lowerl <= elf_prog->upperl);
 
 		/* Calculate the in-memory phdr offset */
-		if (phdr.p_offset <= ehdr.e_phoff &&
-		    ehdr.e_phoff < phdr.p_offset + phdr.p_filesz)
-			elf_prog->phdr.off = ehdr.e_phoff - phdr.p_offset +
-					     phdr.p_vaddr;
+		if (phdr.p_offset <= ehdr.e_phoff
+		    && ehdr.e_phoff < phdr.p_offset + phdr.p_filesz)
+			elf_prog->phdr.off =
+			    ehdr.e_phoff - phdr.p_offset + phdr.p_vaddr;
 	}
-	uk_pr_debug("%s: base: pie + 0x%"PRIx64", len: 0x%"PRIx64"\n",
-		    elf_prog->name, elf_prog->lowerl, elf_prog->upperl - elf_prog->lowerl);
+	uk_pr_debug("%s: base: pie + 0x%" PRIx64 ", len: 0x%" PRIx64 "\n",
+		    elf_prog->name, elf_prog->lowerl,
+		    elf_prog->upperl - elf_prog->lowerl);
 
 	/* This should've been set a few lines above. It can't be 0 either
 	 * because it would overlap with the actual Elf Header.
@@ -250,7 +256,7 @@ static void elf_unload_vaimg(struct elf_prog *elf_prog)
 		elf_prog->entry = 0;
 	}
 }
-#else /* !CONFIG_LIBPOSIX_MMAP */
+#else  /* !CONFIG_LIBPOSIX_MMAP */
 static void elf_unload_vaimg(struct elf_prog *elf_prog)
 {
 	if (elf_prog->vabase) {
@@ -281,18 +287,19 @@ static int elf_load_imgcpy(struct elf_prog *elf_prog, Elf *elf,
 		goto err_out;
 	}
 
-	elf_prog->vabase = uk_memalign(elf_prog->a, elf_prog->align,
-				       elf_prog->valen);
+	elf_prog->vabase =
+	    uk_memalign(elf_prog->a, elf_prog->align, elf_prog->valen);
 	if (unlikely(!elf_prog->vabase)) {
-		uk_pr_debug("%s: Not enough memory to load image (failed to allocate %"PRIu64" bytes)\n",
-			    elf_prog->name, (uint64_t) elf_prog->valen);
+		uk_pr_debug("%s: Not enough memory to load image (failed to "
+			    "allocate %" PRIu64 " bytes)\n",
+			    elf_prog->name, (uint64_t)elf_prog->valen);
 		return -ENOMEM;
 	}
 
-	uk_pr_debug("%s: Program/Library memory region: 0x%"PRIx64"-0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t) elf_prog->vabase,
-		    (uint64_t) elf_prog->vabase + elf_prog->valen);
+	uk_pr_debug("%s: Program/Library memory region: 0x%" PRIx64
+		    "-0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)elf_prog->vabase,
+		    (uint64_t)elf_prog->vabase + elf_prog->valen);
 
 	/* Load segments to allocated memory and set start & entry */
 	if (unlikely(elf_getphnum(elf, &phnum) == 0)) {
@@ -302,39 +309,38 @@ static int elf_load_imgcpy(struct elf_prog *elf_prog, Elf *elf,
 		goto err_free_img;
 	}
 
-	elf_prog->entry = (uintptr_t) elf_prog->vabase + ehdr.e_entry;
+	elf_prog->entry = (uintptr_t)elf_prog->vabase + ehdr.e_entry;
 	for (phi = 0; phi < phnum; ++phi) {
 		if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
-			elferr_warn("%s: Failed to get program header %"PRIu64"\n",
-				    elf_prog->name, (uint64_t) phi);
+			elferr_warn("%s: Failed to get program header %" PRIu64
+				    "\n",
+				    elf_prog->name, (uint64_t)phi);
 			continue;
 		}
 		if (phdr.p_type != PT_LOAD)
 			continue;
 
 		vastart = phdr.p_vaddr + (uintptr_t)elf_prog->vabase;
-		vaend   = vastart + phdr.p_filesz;
+		vaend = vastart + phdr.p_filesz;
 		if (!elf_prog->start || (vastart < elf_prog->start))
 			elf_prog->start = vastart;
 
-		uk_pr_debug("%s: Copying 0x%"PRIx64" - 0x%"PRIx64" -> 0x%"PRIx64" - 0x%"PRIx64"\n",
-			    elf_prog->name,
-			    (uint64_t) img_base + phdr.p_offset,
-			    (uint64_t) img_base + phdr.p_offset + phdr.p_filesz,
-			    (uint64_t) vastart,
-			    (uint64_t) vaend);
-		memcpy((void *) vastart,
-		       (const void *)((uintptr_t) img_base + phdr.p_offset),
-		       (size_t) phdr.p_filesz);
+		uk_pr_debug("%s: Copying 0x%" PRIx64 " - 0x%" PRIx64
+			    " -> 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+			    elf_prog->name, (uint64_t)img_base + phdr.p_offset,
+			    (uint64_t)img_base + phdr.p_offset + phdr.p_filesz,
+			    (uint64_t)vastart, (uint64_t)vaend);
+		memcpy((void *)vastart,
+		       (const void *)((uintptr_t)img_base + phdr.p_offset),
+		       (size_t)phdr.p_filesz);
 
 		/* Compute the area that needs to be zeroed */
 		vastart = vaend;
-		vaend   = vastart + (phdr.p_memsz - phdr.p_filesz);
-		vaend   = PAGE_ALIGN_UP(vaend);
-		uk_pr_debug("%s: Zeroing 0x%"PRIx64" - 0x%"PRIx64"\n",
-			    elf_prog->name,
-			    (uint64_t) (vastart),
-			    (uint64_t) (vaend));
+		vaend = vastart + (phdr.p_memsz - phdr.p_filesz);
+		vaend = PAGE_ALIGN_UP(vaend);
+		uk_pr_debug("%s: Zeroing 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+			    elf_prog->name, (uint64_t)(vastart),
+			    (uint64_t)(vaend));
 		memset((void *)(vastart), 0, vaend - vastart);
 	}
 	return 0;
@@ -384,10 +390,8 @@ static int elf_load_mmap_filesz_memsz_diff(struct elf_prog *elf_prog,
 {
 	UK_ASSERT(elf_prog && phdr && vastart && vaend);
 
-	uk_pr_debug("%s: Zeroing 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)(vastart),
-		    (uint64_t)(vaend));
+	uk_pr_debug("%s: Zeroing 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)(vastart), (uint64_t)(vaend));
 
 	/* From the last byte contained in filesz to the last
 	 * byte contained in memsz, we can either have:
@@ -414,13 +418,14 @@ static int elf_load_mmap_filesz_memsz_diff(struct elf_prog *elf_prog,
 	 * it (.bss is quite large).
 	 */
 	vastart = PAGE_ALIGN_UP(vastart);
-	vastart = (uintptr_t)mmap((void *)vastart, vaend - vastart,
-				  PROT_EXEC | PROT_READ | PROT_WRITE,
-				  MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,
-				  -1, 0);
+	vastart =
+	    (uintptr_t)mmap((void *)vastart, vaend - vastart,
+			    PROT_READ | PROT_WRITE,
+			    MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
 	if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
 		uk_pr_err("Failed to mmap the NOBITS part of phdr at "
-			  "offset %lu\n", phdr->p_offset);
+			  "offset %lu\n",
+			  phdr->p_offset);
 		return (int)vastart;
 	}
 
@@ -428,8 +433,8 @@ static int elf_load_mmap_filesz_memsz_diff(struct elf_prog *elf_prog,
 }
 
 /* Use this to mmap first PT_LOAD */
-static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
-				GElf_Phdr *phdr, int fd)
+static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog, GElf_Phdr *phdr,
+				int fd)
 {
 	uintptr_t vastart_old, vastart_aligned;
 	uintptr_t vaend_old, vaend_new;
@@ -480,9 +485,9 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 		}
 	}
 
-	uk_pr_debug("%s: Memory mapped 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)phdr->p_offset,
+	uk_pr_debug("%s: Memory mapped 0x%" PRIx64 " - 0x%" PRIx64
+		    " to 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)phdr->p_offset,
 		    (uint64_t)phdr->p_offset + phdr->p_filesz,
 		    (uint64_t)vastart,
 		    (uint64_t)vastart + (uint64_t)phdr->p_filesz);
@@ -502,9 +507,9 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 	/* We got ehdr.e_entry added initially at the start of elf_load_fd() */
 	elf_prog->entry += (uintptr_t)elf_prog->vabase;
 
-	uk_pr_debug("%s: Program/Library memory region: 0x%"PRIx64"-0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)elf_prog->vabase,
+	uk_pr_debug("%s: Program/Library memory region: 0x%" PRIx64
+		    "-0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)elf_prog->vabase,
 		    (uint64_t)elf_prog->vabase + elf_prog->valen);
 
 	vastart =
@@ -517,9 +522,9 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 	}
 	elf_prog->start = vastart;
 
-	uk_pr_debug("%s: Memory mapped 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)phdr->p_offset,
+	uk_pr_debug("%s: Memory mapped 0x%" PRIx64 " - 0x%" PRIx64
+		    " to 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)phdr->p_offset,
 		    (uint64_t)phdr->p_offset + phdr->p_filesz,
 		    (uint64_t)vastart,
 		    (uint64_t)vastart + (uint64_t)phdr->p_filesz);
@@ -528,8 +533,8 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 	vastart = vastart + phdr->p_filesz;
 	vaend = PAGE_ALIGN_UP(vastart + (phdr->p_memsz - phdr->p_filesz));
 	if (vaend > vastart) {
-		rc = elf_load_mmap_filesz_memsz_diff(elf_prog, phdr,
-						     vastart, vaend);
+		rc = elf_load_mmap_filesz_memsz_diff(elf_prog, phdr, vastart,
+						     vaend);
 		if (unlikely(rc)) {
 			uk_pr_err("Failed to map difference between filesz and "
 				  "memsz\n");
@@ -541,8 +546,8 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 }
 
 /* Use this to mmap every PT_LOAD but the first one */
-static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
-				   GElf_Phdr *phdr, int fd)
+static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog, GElf_Phdr *phdr,
+				   int fd)
 {
 	uintptr_t vastart, vaend;
 	uint64_t delta_p_offset;
@@ -552,6 +557,11 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	prot = ((phdr->p_flags & PF_R) ? PROT_READ : 0x0)
 	       | ((phdr->p_flags & PF_W) ? PROT_WRITE : 0x0)
 	       | ((phdr->p_flags & PF_X) ? PROT_EXEC : 0x0);
+
+	/* if (phdr->p_vaddr == 0xe9e9000) { */
+	/* 	uk_pr_info("skippingt e9patch segment\n"); */
+	/* 	return 0; */
+	/* } */
 
 	/* If this is not the first PT_LOAD then vabase/start must be != 0 */
 	UK_ASSERT(elf_prog->vabase && elf_prog->start && phdr);
@@ -566,12 +576,12 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	 */
 	delta_p_offset = phdr->p_vaddr - PAGE_ALIGN_DOWN(phdr->p_vaddr);
 
-	addr = (void *)PAGE_ALIGN_DOWN((phdr->p_vaddr +
-				       (uintptr_t)elf_prog->vabase));
+	addr = (void *)PAGE_ALIGN_DOWN(
+	    (phdr->p_vaddr + (uintptr_t)elf_prog->vabase));
 
-	uk_pr_debug("%s: Memory mapping 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)phdr->p_offset - delta_p_offset,
+	uk_pr_debug("%s: Memory mapping 0x%" PRIx64 " - 0x%" PRIx64
+		    " to 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)phdr->p_offset - delta_p_offset,
 		    (uint64_t)phdr->p_offset + phdr->p_filesz + delta_p_offset,
 		    (uint64_t)addr,
 		    (uint64_t)addr + (uint64_t)phdr->p_filesz + delta_p_offset);
@@ -592,8 +602,8 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	vastart = vastart + phdr->p_filesz + delta_p_offset;
 	vaend = PAGE_ALIGN_UP(vastart + (phdr->p_memsz - phdr->p_filesz));
 	if (vaend > vastart) {
-		rc = elf_load_mmap_filesz_memsz_diff(elf_prog, phdr,
-						     vastart, vaend);
+		rc = elf_load_mmap_filesz_memsz_diff(elf_prog, phdr, vastart,
+						     vaend);
 		if (unlikely(rc)) {
 			uk_pr_err("Failed to map difference between filesz and "
 				  "memsz\n");
@@ -611,7 +621,7 @@ static int elf_load_fdphdr(struct elf_prog *elf_prog, GElf_Phdr *phdr, int fd)
 
 	return do_elf_load_fdphdr_0(elf_prog, phdr, fd);
 }
-#else /* !CONFIG_LIBPOSIX_MMAP */
+#else  /* !CONFIG_LIBPOSIX_MMAP */
 /* Read from fd exact `len` bytes from offset `roff`, fail otherwise */
 static int elf_load_fdphdr_read(int fd, off_t roff, void *dst, size_t len)
 {
@@ -647,16 +657,15 @@ static int elf_load_fdphdr(struct elf_prog *elf_prog, GElf_Phdr *phdr, int fd)
 	int ret;
 
 	vastart = phdr->p_vaddr + (uintptr_t)elf_prog->vabase;
-	vaend   = vastart + phdr->p_filesz;
+	vaend = vastart + phdr->p_filesz;
 	if (!elf_prog->start || (vastart < elf_prog->start))
 		elf_prog->start = vastart;
 
-	uk_pr_debug("%s: Reading 0x%"PRIx64" - 0x%"PRIx64" to 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)phdr->p_offset,
+	uk_pr_debug("%s: Reading 0x%" PRIx64 " - 0x%" PRIx64 " to 0x%" PRIx64
+		    " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)phdr->p_offset,
 		    (uint64_t)phdr->p_offset + phdr->p_filesz,
-		    (uint64_t)vastart,
-		    (uint64_t)vaend);
+		    (uint64_t)vastart, (uint64_t)vaend);
 
 	ret = elf_load_fdphdr_read(fd, phdr->p_offset, (void *)vastart,
 				   phdr->p_filesz);
@@ -670,10 +679,8 @@ static int elf_load_fdphdr(struct elf_prog *elf_prog, GElf_Phdr *phdr, int fd)
 	vastart = vaend;
 	vaend = vastart + (phdr->p_memsz - phdr->p_filesz);
 	vaend = PAGE_ALIGN_UP(vaend);
-	uk_pr_debug("%s: Zeroing 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)(vastart),
-		    (uint64_t)(vaend));
+	uk_pr_debug("%s: Zeroing 0x%" PRIx64 " - 0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)(vastart), (uint64_t)(vaend));
 	memset((void *)(vastart), 0, vaend - vastart);
 
 	return 0;
@@ -703,19 +710,20 @@ static int elf_load_fd(struct elf_prog *elf_prog, Elf *elf, int fd)
 	 * us with the new address.
 	 */
 	elf_prog->entry = ehdr.e_entry;
-#else /* !CONFIG_LIBPOSIX_MMAP */
-	elf_prog->vabase = uk_memalign(elf_prog->a, elf_prog->align,
-				       elf_prog->valen);
+#else  /* !CONFIG_LIBPOSIX_MMAP */
+	elf_prog->vabase =
+	    uk_memalign(elf_prog->a, elf_prog->align, elf_prog->valen);
 	if (unlikely(!elf_prog->vabase)) {
-		uk_pr_debug("%s: Not enough memory to load image (failed to allocate %"PRIu64" bytes)\n",
+		uk_pr_debug("%s: Not enough memory to load image (failed to "
+			    "allocate %" PRIu64 " bytes)\n",
 			    elf_prog->name, (uint64_t)elf_prog->valen);
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	uk_pr_debug("%s: Program/Library memory region: 0x%"PRIx64"-0x%"PRIx64"\n",
-		    elf_prog->name,
-		    (uint64_t)elf_prog->vabase,
+	uk_pr_debug("%s: Program/Library memory region: 0x%" PRIx64
+		    "-0x%" PRIx64 "\n",
+		    elf_prog->name, (uint64_t)elf_prog->vabase,
 		    (uint64_t)elf_prog->vabase + elf_prog->valen);
 
 	/* Load segments to allocated memory and set start & entry.
@@ -736,8 +744,10 @@ static int elf_load_fd(struct elf_prog *elf_prog, Elf *elf, int fd)
 	if (elf_prog->interp.required) {
 		for (phi = 0; phi < phnum; ++phi) {
 			if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
-				elferr_warn("%s: Failed to get program header %"PRIu64"\n",
-					    elf_prog->name, (uint64_t) phi);
+				elferr_warn(
+				    "%s: Failed to get program header %" PRIu64
+				    "\n",
+				    elf_prog->name, (uint64_t)phi);
 				continue;
 			}
 			if (phdr.p_type != PT_INTERP)
@@ -745,10 +755,12 @@ static int elf_load_fd(struct elf_prog *elf_prog, Elf *elf, int fd)
 
 			UK_ASSERT(!elf_prog->interp.path);
 
-			elf_prog->interp.path = malloc(phdr.p_filesz);
+			elf_prog->interp.path = uk_malloc(
+			    oblivium_get_unsafe_allocator(), phdr.p_filesz);
 			if (!elf_prog->interp.path) {
-				uk_pr_err("%s: Failed to load INTERP path: %s\n",
-					  elf_prog->name, strerror(-ret));
+				uk_pr_err(
+				    "%s: Failed to load INTERP path: %s\n",
+				    elf_prog->name, strerror(-ret));
 				goto err_out;
 			}
 
@@ -766,8 +778,9 @@ static int elf_load_fd(struct elf_prog *elf_prog, Elf *elf, int fd)
 
 	for (phi = 0; phi < phnum; ++phi) {
 		if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
-			elferr_warn("%s: Failed to get program header %"PRIu64"\n",
-				    elf_prog->name, (uint64_t) phi);
+			elferr_warn("%s: Failed to get program header %" PRIu64
+				    "\n",
+				    elf_prog->name, (uint64_t)phi);
 			continue;
 		}
 		if (phdr.p_type != PT_LOAD)
@@ -803,8 +816,10 @@ static int elf_load_ptprotect(struct elf_prog *elf_prog, Elf *elf)
 
 	vas = uk_vas_get_active();
 	if (unlikely(PTRISERR(vas))) {
-		uk_pr_warn("%s: Unable to set page protections bits. Continuing without. Program execution might be unsafe or fail.\n",
-			   elf_prog->name);
+		uk_pr_warn(
+		    "%s: Unable to set page protections bits. Continuing "
+		    "without. Program execution might be unsafe or fail.\n",
+		    elf_prog->name);
 		return 0;
 	}
 
@@ -827,37 +842,38 @@ static int elf_load_ptprotect(struct elf_prog *elf_prog, Elf *elf)
 		int attr;
 
 		if (gelf_getphdr(elf, phi, &phdr) != &phdr) {
-			elferr_warn("%s: Failed to get program header %"PRIu64"\n",
-				    elf_prog->name, (uint64_t) phi);
+			elferr_warn("%s: Failed to get program header %" PRIu64
+				    "\n",
+				    elf_prog->name, (uint64_t)phi);
 			continue;
 		}
 		if (phdr.p_type != PT_LOAD)
 			continue;
 
 		vastart = phdr.p_vaddr + (uintptr_t)elf_prog->vabase;
-		vaend   = vastart + phdr.p_memsz;
+		vaend = vastart + phdr.p_memsz;
 		vastart = PAGE_ALIGN_DOWN(vastart);
-		vaend   = PAGE_ALIGN_UP(vaend);
-		valen   = vaend - vastart;
-		uk_pr_debug("%s: Protecting 0x%"PRIx64" - 0x%"PRIx64": %c%c%c\n",
-				elf_prog->name,
-				(uint64_t) vastart,
-				(uint64_t) vaend,
-				phdr.p_flags & PF_R ? 'R' : '-',
-				phdr.p_flags & PF_W ? 'W' : '-',
-				phdr.p_flags & PF_X ? 'X' : '-');
+		vaend = PAGE_ALIGN_UP(vaend);
+		valen = vaend - vastart;
+		uk_pr_debug("%s: Protecting 0x%" PRIx64 " - 0x%" PRIx64
+			    ": %c%c%c\n",
+			    elf_prog->name, (uint64_t)vastart, (uint64_t)vaend,
+			    phdr.p_flags & PF_R ? 'R' : '-',
+			    phdr.p_flags & PF_W ? 'W' : '-',
+			    phdr.p_flags & PF_X ? 'X' : '-');
 
-		attr =
-		    ((phdr.p_flags & PF_R) ? PAGE_ATTR_PROT_READ : 0x0)
-		    | ((phdr.p_flags & PF_W) ? PAGE_ATTR_PROT_WRITE : 0x0)
-		    | ((phdr.p_flags & PF_X) ? PAGE_ATTR_PROT_EXEC : 0x0);
+		attr = ((phdr.p_flags & PF_R) ? PAGE_ATTR_PROT_READ : 0x0)
+		       | ((phdr.p_flags & PF_W) ? PAGE_ATTR_PROT_WRITE : 0x0)
+		       | ((phdr.p_flags & PF_X) ? PAGE_ATTR_PROT_EXEC : 0x0);
 
 		attr |= PAGE_ATTR_ENCRYPT;
 
 		ret = uk_vma_set_attr(vas, vastart, valen, attr, 0);
 		if (ret < 0)
-			uk_pr_err("%s: Failed to set protection bits: %d. Program execution may fail or might be unsafe.\n",
-				  elf_prog->name, ret);
+			uk_pr_err(
+			    "%s: Failed to set protection bits: %d. Program "
+			    "execution may fail or might be unsafe.\n",
+			    elf_prog->name, ret);
 	}
 	return 0;
 }
@@ -877,22 +893,27 @@ static void elf_unload_ptunprotect(struct elf_prog *elf_prog)
 		return;
 	}
 
-	vastart = (uintptr_t) elf_prog->vabase;
-	vaend   = vastart + (uintptr_t) elf_prog->valen;
+	vastart = (uintptr_t)elf_prog->vabase;
+	vaend = vastart + (uintptr_t)elf_prog->valen;
 	vastart = PAGE_ALIGN_DOWN(vastart);
-	vaend   = PAGE_ALIGN_UP(vaend);
-	valen   = vaend - vastart;
-	uk_pr_debug("%s: Restore RW- protection: 0x%"PRIx64" - 0x%"PRIx64"\n",
-		    elf_prog->name, (uint64_t) vastart, (uint64_t) vaend);
-	ret = uk_vma_set_attr(vas, vastart, valen,
-			      (PAGE_ATTR_PROT_READ | PAGE_ATTR_PROT_WRITE | PAGE_ATTR_ENCRYPT), 0);
+	vaend = PAGE_ALIGN_UP(vaend);
+	valen = vaend - vastart;
+	uk_pr_debug("%s: Restore RW- protection: 0x%" PRIx64 " - 0x%" PRIx64
+		    "\n",
+		    elf_prog->name, (uint64_t)vastart, (uint64_t)vaend);
+	ret = uk_vma_set_attr(
+	    vas, vastart, valen,
+	    (PAGE_ATTR_PROT_READ | PAGE_ATTR_PROT_WRITE | PAGE_ATTR_ENCRYPT),
+	    0);
 	if (unlikely(ret < 0))
 		uk_pr_err("%s: Failed to restore protection bits: %d.\n",
 			  elf_prog->name, ret);
 }
 #else /* !CONFIG_LIBUKVMEM */
 #define elf_load_ptprotect(p, e) ({ 0; })
-#define elf_unload_ptunprotect(p) do {} while (0)
+#define elf_unload_ptunprotect(p)                                              \
+	do {                                                                   \
+	} while (0)
 #endif /* !CONFIG_LIBUKVMEM */
 
 void elf_unload(struct elf_prog *elf_prog)
@@ -915,8 +936,7 @@ struct elf_prog *elf_load_img(struct uk_alloc *a, void *img_base,
 
 	elf = elf_memory(img_base, img_len);
 	if (unlikely(!elf)) {
-		elferr_err("%s: Failed to initialize ELF parser\n",
-			   progname);
+		elferr_err("%s: Failed to initialize ELF parser\n", progname);
 		ret = -EBUSY;
 		goto err_out;
 	}
@@ -936,7 +956,8 @@ struct elf_prog *elf_load_img(struct uk_alloc *a, void *img_base,
 		goto err_free_elf_prog;
 	}
 	if (unlikely(elf_prog->interp.required)) {
-		uk_pr_err("%s: Requests program interpreter: Unsupported for in-memory ELF images\n",
+		uk_pr_err("%s: Requests program interpreter: Unsupported for "
+			  "in-memory ELF images\n",
 			  progname);
 		ret = -ENOTSUP;
 		goto err_free_elf_prog;
@@ -944,8 +965,8 @@ struct elf_prog *elf_load_img(struct uk_alloc *a, void *img_base,
 
 	ret = elf_load_imgcpy(elf_prog, elf, img_base, img_len);
 	if (unlikely(ret < 0)) {
-		uk_pr_err("%s: Failed to copy the executable: %d\n",
-			  progname, ret);
+		uk_pr_err("%s: Failed to copy the executable: %d\n", progname,
+			  ret);
 		goto err_free_elf_prog;
 	}
 
@@ -983,8 +1004,8 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 
 	fd = open(path, O_RDONLY);
 	if (unlikely(fd < 0)) {
-		uk_pr_err("%s: Failed to execute %s: %s\n",
-			  progname, path, strerror(errno));
+		uk_pr_err("%s: Failed to execute %s: %s\n", progname, path,
+			  strerror(errno));
 		ret = -errno;
 		goto err_out;
 	}
@@ -993,29 +1014,30 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 	/* Check for executable bit */
 	ret = fstat(fd, &fd_stat);
 	if (unlikely(ret != 0)) {
-		uk_pr_err("%s: Failed to execute %s: %s\n",
-			  progname, path, strerror(errno));
+		uk_pr_err("%s: Failed to execute %s: %s\n", progname, path,
+			  strerror(errno));
 		ret = -errno;
 		goto err_close_fd;
 	}
 	if (unlikely(!(fd_stat.st_mode & S_IXUSR))) {
-		uk_pr_err("%s: Failed to execute %s: %s\n",
-			  progname, path, strerror(EPERM));
+		uk_pr_err("%s: Failed to execute %s: %s\n", progname, path,
+			  strerror(EPERM));
 		ret = -EPERM;
 		goto err_close_fd;
 	}
-#else /* !CONFIG_APPELFLOADER_VFSEXEC_EXECBIT */
+#else  /* !CONFIG_APPELFLOADER_VFSEXEC_EXECBIT */
 	uk_pr_debug("%s: Note, ignoring executable bit state\n", progname);
 #endif /* !CONFIG_APPELFLOADER_VFSEXEC_EXECBIT */
 
+	uk_pr_info("elf_open\n");
 	elf = elf_open(fd);
 	if (unlikely(!elf)) {
-		elferr_err("%s: Failed to initialize ELF parser\n",
-			   progname);
+		elferr_err("%s: Failed to initialize ELF parser\n", progname);
 		ret = -EBUSY;
 		goto err_close_fd;
 	}
 
+	uk_pr_info("calloc\n");
 	elf_prog = uk_calloc(a, 1, sizeof(*elf_prog));
 	if (unlikely(!elf_prog)) {
 		ret = -ENOMEM;
@@ -1025,6 +1047,7 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 	elf_prog->name = progname;
 	elf_prog->path = path;
 
+	uk_pr_info("loadparse\n");
 	ret = elf_load_parse(elf_prog, elf);
 	if (unlikely(ret < 0)) {
 		uk_pr_err("%s: Parsing of ELF image failed: %s (%d)\n",
@@ -1038,10 +1061,11 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 		goto err_free_elf_prog;
 	}
 
+	uk_pr_info("load fd\n");
 	ret = elf_load_fd(elf_prog, elf, fd);
 	if (unlikely(ret < 0)) {
-		uk_pr_err("%s: Failed to copy the executable: %d\n",
-			  progname, ret);
+		uk_pr_err("%s: Failed to copy the executable: %d\n", progname,
+			  ret);
 		goto err_free_elf_prog;
 	}
 
@@ -1052,10 +1076,10 @@ static struct elf_prog *do_elf_load_vfs(struct uk_alloc *a, const char *path,
 		goto err_unload_vaimg;
 	}
 
-	elf_end(elf);
 	// INCOGNITOS: Don't close the FDs just yet, so that e9init can open
 	// them.
-	// close(fd);
+	elf_end(elf);
+	close(fd);
 	return elf_prog;
 
 err_unload_vaimg:
@@ -1071,7 +1095,8 @@ err_out:
 }
 #include <oblivium/utils.h>
 
-static void __synthesize_relative_insn(void *dest, void *from, void *to, __u8 op)
+static void __synthesize_relative_insn(void *dest, void *from, void *to,
+				       __u8 op)
 {
 	struct __arch_relative_insn {
 		__u8 op;
@@ -1081,7 +1106,8 @@ static void __synthesize_relative_insn(void *dest, void *from, void *to, __u8 op
 	int64_t offset = ((long)(to) - ((long)(from) + 5));
 	if (offset > INT32_MAX || offset < INT32_MIN) {
 		// Target is out of range for a 32-bit relative call
-		UK_CRASH("Target 0%lx offset %ld is out of range\n", (unsigned long)to, offset);
+		UK_CRASH("Target 0%lx offset %ld is out of range\n",
+			 (unsigned long)to, offset);
 	}
 
 	insn = (struct __arch_relative_insn *)dest;
@@ -1172,15 +1198,15 @@ struct elf_prog *elf_load_vfs(struct uk_alloc *a, const char *path,
 	if (elf_prog->interp.required) {
 		uk_pr_debug("%s: Loading program interpreter %s...\n",
 			    elf_prog->name, elf_prog->interp.path);
-		elf_prog->interp.prog = do_elf_load_vfs(a,
-							elf_prog->interp.path,
-							"<interp>", true);
-		if (unlikely(PTRISERR(elf_prog->interp.prog) ||
-			     !elf_prog->interp.prog)) {
+		elf_prog->interp.prog =
+		    do_elf_load_vfs(a, elf_prog->interp.path, "<interp>", true);
+		if (unlikely(PTRISERR(elf_prog->interp.prog)
+			     || !elf_prog->interp.prog)) {
 			err = PTR2ERR(elf_prog->interp.prog);
-			uk_pr_err("%s: Failed to load program interpreter %s: %s\n",
-				  elf_prog->name, elf_prog->interp.path,
-				  strerror(-err));
+			uk_pr_err(
+			    "%s: Failed to load program interpreter %s: %s\n",
+			    elf_prog->name, elf_prog->interp.path,
+			    strerror(-err));
 			goto err_unload_prog;
 		}
 	}
