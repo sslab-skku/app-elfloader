@@ -435,7 +435,11 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 	uintptr_t vaend_old, vaend_new;
 	uintptr_t vastart, vaend;
 	__sz mmap_len;
+	int prot;
 	int rc;
+	prot = ((phdr->p_flags & PF_R) ? PROT_READ : 0x0)
+	       | ((phdr->p_flags & PF_W) ? PROT_WRITE : 0x0)
+	       | ((phdr->p_flags & PF_X) ? PROT_EXEC : 0x0);
 
 	/* First start/vabase can't be !0 before loading first PT_LOAD */
 	UK_ASSERT(!elf_prog->start && !elf_prog->vabase && phdr);
@@ -445,10 +449,9 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 
 	mmap_len = elf_prog->valen + elf_prog->align;
 
-	vastart = (uintptr_t)mmap(NULL, mmap_len,
-				  PROT_EXEC | PROT_READ | PROT_WRITE,
-				  MAP_PRIVATE,
-				  fd, phdr->p_offset);
+	vastart =
+	    (uintptr_t)mmap(NULL, mmap_len, prot,
+			    MAP_PRIVATE, fd, phdr->p_offset);
 	if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
 		uk_pr_err("Failed to mmap the phdr at offset %lu\n",
 			  phdr->p_offset);
@@ -460,11 +463,10 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 
 	/* Force remap with MAP_FIXED */
 	if (vastart_aligned != vastart) {
-		vastart = (uintptr_t)mmap((void *)vastart_aligned,
-					  phdr->p_filesz,
-					  PROT_EXEC | PROT_READ | PROT_WRITE,
-					  MAP_PRIVATE | MAP_FIXED,
-					  fd, phdr->p_offset);
+		vastart = (uintptr_t)mmap(
+		    (void *)vastart_aligned, phdr->p_filesz,
+		    prot, MAP_PRIVATE | MAP_FIXED,
+		    fd, phdr->p_offset);
 		if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
 			uk_pr_err("Failed to mmap the phdr at offset %lu\n",
 				  phdr->p_offset);
@@ -505,12 +507,10 @@ static int do_elf_load_fdphdr_0(struct elf_prog *elf_prog,
 		    (uint64_t)elf_prog->vabase,
 		    (uint64_t)elf_prog->vabase + elf_prog->valen);
 
-
-	vastart = (uintptr_t)mmap((void *)vastart + phdr->p_vaddr,
-				  phdr->p_filesz,
-				  PROT_EXEC | PROT_READ | PROT_WRITE,
-				  MAP_PRIVATE | MAP_FIXED,
-				  fd, phdr->p_offset);
+	vastart =
+	    (uintptr_t)mmap((void *)vastart + phdr->p_vaddr, phdr->p_filesz,
+			    prot,
+			    MAP_PRIVATE | MAP_FIXED, fd, phdr->p_offset);
 	if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
 		uk_pr_err("Failed to mmap first phdr\n");
 		return (int)vastart;
@@ -548,6 +548,10 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	uint64_t delta_p_offset;
 	void *addr;
 	int rc;
+	int prot;
+	prot = ((phdr->p_flags & PF_R) ? PROT_READ : 0x0)
+	       | ((phdr->p_flags & PF_W) ? PROT_WRITE : 0x0)
+	       | ((phdr->p_flags & PF_X) ? PROT_EXEC : 0x0);
 
 	/* If this is not the first PT_LOAD then vabase/start must be != 0 */
 	UK_ASSERT(elf_prog->vabase && elf_prog->start && phdr);
@@ -575,10 +579,9 @@ static int do_elf_load_fdphdr_not0(struct elf_prog *elf_prog,
 	/* mmap with all flags. If protections are enabled, these will
 	 * be manually re-adjusted later.
 	 */
-	vastart = (uintptr_t)mmap(addr, phdr->p_filesz + delta_p_offset,
-				  PROT_EXEC | PROT_READ | PROT_WRITE,
-				  MAP_FIXED | MAP_PRIVATE,
-				  fd, phdr->p_offset - delta_p_offset);
+	vastart = (uintptr_t)mmap(addr, phdr->p_filesz + delta_p_offset, prot,
+				  MAP_FIXED | MAP_PRIVATE, fd,
+				  phdr->p_offset - delta_p_offset);
 	if (unlikely(vastart == (uintptr_t)MAP_FAILED)) {
 		uk_pr_err("Failed to mmap the phdr at offset %lu\n",
 			  phdr->p_offset);
