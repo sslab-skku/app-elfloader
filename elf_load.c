@@ -1110,8 +1110,12 @@ struct e9_config_s {
 	uint32_t handler;	// Trap handler function
 };
 
-extern void* e9init();
-void incognitos_prepare_prog_entry(struct elf_prog *prog){
+extern void *e9init();
+void incognitos_prepare_prog_entry(struct elf_prog *prog)
+{
+
+	/* Patch e9patch program entry to call our program entry, since elfpatch's one
+	 * relies on linux-specific features */
 	if (!e9patch_entry.p_vaddr)
 		return;
 
@@ -1121,18 +1125,24 @@ void incognitos_prepare_prog_entry(struct elf_prog *prog){
 		char *data = (char *)prog->entry;
 		size_t call_init_offset = 25;
 
-		dump_disas(data, 100);
+		/* dump_disas(data, 100); */
+		uk_pr_info("Patching program entry offset %zu with call to %p\n", call_init_offset, e9init);
 
 		int ret;
 		struct uk_vas *vas = uk_vas_get_active();
 		int attr = PAGE_ATTR_PROT_RWX | PAGE_ATTR_ENCRYPT;
+		const struct uk_vma *vma = uk_vma_find(vas, loader_addr);
+		int prev_attr = vma->attr;
 
 		ret = uk_vma_set_attr(vas, (uintptr_t)loader_addr,
 				      PAGE_ALIGN_UP(e9patch_entry.p_memsz),
 				      attr, 0);
 
-		__synthesize_relative_insn(data + 25, data + 25,
-					   e9init, 0xe8);
+		__synthesize_relative_insn(data + call_init_offset, data + call_init_offset, e9init, 0xe8);
+
+		ret = uk_vma_set_attr(vas, (uintptr_t)loader_addr,
+				      PAGE_ALIGN_UP(e9patch_entry.p_memsz),
+				      prev_attr, 0);
 		dump_disas(data, 100);
 
 		if (ret) {
