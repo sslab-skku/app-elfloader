@@ -1,4 +1,6 @@
 #define UK_DEBUG 1
+
+#include "oblivium/oblivium.h"
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
  * Authors: Simon Kuenzer <simon@unikraft.io>
@@ -182,9 +184,9 @@ int main(int argc, char *argv[])
 	 * It will have a new stack and an ukarch_ctx
 	 */
 	app_thread = uk_thread_create_container(uk_alloc_get_default(),
-						uk_alloc_get_default(),
+						oblivium_get_unsafe_allocator(),
 				 PAGES2BYTES(CONFIG_APPELFLOADER_STACK_NBPAGES),
-						uk_alloc_get_default(),
+						oblivium_get_unsafe_allocator(),
 						false,
 						progname,
 						NULL, NULL);
