@@ -345,6 +345,34 @@ err_out:
 	return ret;
 }
 
+static void zero_safe(void *start, size_t len) {
+
+	struct uk_vma *vma = (struct uk_vma *)uk_vma_find(
+	    uk_vas_get_active(), (__vaddr_t)start);
+
+	int prev_attr = vma->attr;
+
+	int rc;
+	__sz vma_len = vma->end - vma->start;
+
+	rc = uk_vma_set_attr(uk_vas_get_active(), vma->start, vma_len,
+			PAGE_ATTR_PROT_RWX | PAGE_ATTR_ENCRYPT, 0);
+	UK_ASSERT(!rc);
+	vmem_print(uk_vas_get_active());
+
+	memset(start, 0, len);
+
+	rc = uk_vma_set_attr(uk_vas_get_active(), vma->start, vma_len,
+			prev_attr, 0);
+	UK_ASSERT(!rc);
+
+	/* struct uk_vas *vas, __vaddr_t vaddr, __sz len, unsigned long attr, */
+	/*     unsigned long flags uk_vma_set_attr() */
+
+
+
+}
+
 #if CONFIG_LIBVFSCORE
 #if CONFIG_LIBPOSIX_MMAP
 /* If vastart + phdr.p_filesz (vastart) < vastart + phdr.p_memsz (vaend),
@@ -371,7 +399,8 @@ static int elf_load_mmap_filesz_memsz_diff(struct elf_prog *elf_prog,
 	 * vaend - vastart < PAGE_SIZE
 	 * ...
 	 */
-	memset((void *)vastart, 0, PAGE_ALIGN_UP(vastart) - vastart);
+	/* memset((void *)vastart, 0, PAGE_ALIGN_UP(vastart) - vastart); */
+	zero_safe((void *)vastart, PAGE_ALIGN_UP(vastart) - vastart);
 
 	if (vaend == PAGE_ALIGN_UP(vastart))
 		return 0;
