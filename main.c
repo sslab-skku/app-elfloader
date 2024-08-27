@@ -102,6 +102,7 @@ static __constructor void _libelf_init(void) {
 	if (elf_version(EV_CURRENT) == EV_NONE)
 		UK_CRASH("Failed to initialize libelf: Version error");
 }
+const char* global_path;
 
 int main(int argc, char *argv[])
 {
@@ -163,6 +164,8 @@ int main(int argc, char *argv[])
 	argc -= 1;
 
 #endif /* !CONFIG_APPELFLOADER_CUSTOMAPPNAME */
+
+	global_path = path;
 
 #if CONFIG_APPELFLOADER_INITRDEXEC
 	/*
