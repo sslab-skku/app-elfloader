@@ -35,6 +35,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <uk/sev.h>
+#include "uk/asm/svm.h"
+
 #include <uk/config.h>
 #include <libelf.h>
 #include <stdio.h>
@@ -252,6 +255,25 @@ int main(int argc, char *argv[])
 		    progname,
 		    (void *) app_thread->ctx.ip);
 
+	uk_sev_ghcb_vmm_call(uk_sev_get_ghcb_page(), SVM_VMGEXIT_BOOT_DONE, 0,
+			     0);
+#if CONFIG_SINGLE_STEP_ENTRY
+	uk_sev_ghcb_vmm_call(uk_sev_get_ghcb_page(),
+			     SVM_VMGEXIT_SINGLESTEP_START,
+			     CONFIG_SINGLE_STEP_ENTRY, 0);
+#endif
+
+	/* Test out instruction measurement */
+	uk_sev_ghcb_vmm_call(uk_sev_get_ghcb_page(), SVM_VMGEXIT_PERF, 0,
+			     0);
+
+	volatile int tmp;
+	for (int i=0; i< 23; i++){
+		tmp = i;
+	}
+
+	uk_sev_ghcb_vmm_call(uk_sev_get_ghcb_page(), SVM_VMGEXIT_PERF, 0,
+			     0);
 	/*
 	 * Execute application
 	 */
