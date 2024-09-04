@@ -1211,7 +1211,7 @@ struct elf_prog *elf_load_vfs(struct uk_alloc *a, const char *path,
 		}
 	}
 
-	incognitos_prepare_prog_entry(elf_prog);
+	/* incognitos_prepare_prog_entry(elf_prog); */
 	return elf_prog;
 
 err_unload_prog:
