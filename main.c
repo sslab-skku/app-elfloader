@@ -190,7 +190,8 @@ int main(int argc, char *argv[])
 	 * It will have a new stack and an ukarch_ctx
 	 */
 	app_thread = uk_thread_create_container(uk_alloc_get_default(),
-						oblivium_get_unsafe_allocator(),
+						/* oblivium_get_unsafe_allocator(), */
+						uk_alloc_get_default(),
 				 PAGES2BYTES(CONFIG_APPELFLOADER_STACK_NBPAGES),
 						oblivium_get_unsafe_allocator(),
 						false,
