@@ -1,5 +1,3 @@
-#define UK_DEBUG 1
-
 #include "oblivium/oblivium.h"
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
@@ -189,9 +187,9 @@ int main(int argc, char *argv[])
 	 * Create thread container
 	 * It will have a new stack and an ukarch_ctx
 	 */
-	app_thread = uk_thread_create_container(uk_alloc_get_default(),
-						/* oblivium_get_unsafe_allocator(), */
-						uk_alloc_get_default(),
+	app_thread = uk_thread_create_container(oblivium_get_unsafe_allocator(),
+						oblivium_get_unsafe_allocator(),
+						/* uk_alloc_get_default(), */
 				 PAGES2BYTES(CONFIG_APPELFLOADER_STACK_NBPAGES),
 						oblivium_get_unsafe_allocator(),
 						false,
